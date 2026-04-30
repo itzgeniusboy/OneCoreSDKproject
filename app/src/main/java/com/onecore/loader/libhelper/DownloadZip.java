@@ -349,8 +349,7 @@ public class DownloadZip {
                     String zipPath = new File(context.getFilesDir(), ZIP_FILE_NAME).getAbsolutePath();
                     String outputDir = context.getFilesDir().getAbsolutePath();
                     String password = PASSJKPAPA();
-
-                    if (unzipEncrypted(zipPath, outputDir, password)) {
+                    if (unzipFile(zipPath, outputDir, password)) {
                         moveSoFiles(new File(outputDir, "loader"));
                         new File(context.getFilesDir(), ZIP_FILE_NAME).delete();
                         
@@ -435,9 +434,15 @@ public class DownloadZip {
         }
     }
 
-    private boolean unzipEncrypted(String zipPath, String outputDir, String password) {
+    private boolean unzipFile(String zipPath, String outputDir, String password) {
         try {
-            ZipFile zipFile = new ZipFile(zipPath, password.toCharArray());
+            ZipFile zipFile = new ZipFile(zipPath);
+            if (zipFile.isEncrypted()) {
+                if (password == null || password.trim().isEmpty()) {
+                    return false;
+                }
+                zipFile.setPassword(password.toCharArray());
+            }
             zipFile.extractAll(outputDir);
             setPermissions(new File(outputDir));
             return true;
