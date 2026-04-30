@@ -375,41 +375,61 @@ public class DownloadZip {
 
     private boolean downloadFile(String downloadUrl, DownloadCallback callback) {
         File outputZip = new File(context.getFilesDir(), ZIP_FILE_NAME);
-        try (InputStream input = new URL(downloadUrl).openStream();
-             OutputStream output = new FileOutputStream(outputZip)) {
-
-            HttpURLConnection connection = (HttpURLConnection) new URL(downloadUrl).openConnection();
+        HttpURLConnection connection = null;
+        try {
+            URL url = new URL(downloadUrl);
+            connection = (HttpURLConnection) url.openConnection();
+            connection.setInstanceFollowRedirects(true);
+            connection.setConnectTimeout(15000);
+            connection.setReadTimeout(30000);
+            connection.setRequestProperty("User-Agent", "OneCoreLoader/1.0");
             connection.connect();
-            int lengthOfFile = connection.getContentLength();
-            
-            long totalBytes = lengthOfFile;
-            downloadedBytes = 0;
 
-            byte[] data = new byte[4096];
-            int count;
-            while ((count = input.read(data)) != -1) {
-                downloadedBytes += count;
-                int progress = (int) ((downloadedBytes * 100) / totalBytes);
-                
-                // Update progress
-                final int finalProgress = progress;
-                handler.post(() -> {
-                    if (downloadProgressBar != null && isDownloading) {
-                        updateDownloadProgress(finalProgress, "Downloading...", downloadedBytes, totalBytes);
-                    }
-                    if (callback != null) {
-                        callback.onProgress(finalProgress);
-                    }
-                });
-                
-                output.write(data, 0, count);
+            int responseCode = connection.getResponseCode();
+            if (responseCode < 200 || responseCode >= 300) {
+                return false;
             }
 
-            return outputZip.exists();
+            long totalBytes = connection.getContentLengthLong();
+            downloadedBytes = 0;
+
+            try (InputStream input = connection.getInputStream();
+                 OutputStream output = new FileOutputStream(outputZip)) {
+                byte[] data = new byte[8192];
+                int count;
+                while ((count = input.read(data)) != -1) {
+                    downloadedBytes += count;
+                    output.write(data, 0, count);
+
+                    final int finalProgress;
+                    if (totalBytes > 0) {
+                        finalProgress = (int) ((downloadedBytes * 100) / totalBytes);
+                    } else {
+                        finalProgress = 0;
+                    }
+
+                    handler.post(() -> {
+                        if (downloadProgressBar != null && isDownloading) {
+                            String msg = totalBytes > 0 ? "Downloading..." : "Downloading... (size unknown)";
+                            long safeTotal = totalBytes > 0 ? totalBytes : downloadedBytes;
+                            updateDownloadProgress(finalProgress, msg, downloadedBytes, safeTotal);
+                        }
+                        if (callback != null) {
+                            callback.onProgress(finalProgress);
+                        }
+                    });
+                }
+            }
+
+            return outputZip.exists() && outputZip.length() > 0;
 
         } catch (Exception e) {
             e.printStackTrace();
             return false;
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
         }
     }
 
