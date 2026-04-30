@@ -132,6 +132,12 @@ public class IPackageManagerProxy extends BinderInvocationStub {
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
             String packageName = (String) args[0];
             int flags = MethodParameterUtils.toInt(args[1]);
+
+            if ("com.twitter.android".equals(packageName)
+                    || "com.x.android".equals(packageName)
+                    || "com.facebook.katana".equals(packageName)) {
+                return method.invoke(who, args);
+            }
             
             
             if ("com.android.vending".equals(packageName)) {
@@ -282,6 +288,12 @@ public class IPackageManagerProxy extends BinderInvocationStub {
 
             int flags = MethodParameterUtils.toInt(args[1]);
 
+            if ("com.twitter.android".equals(packageName)
+                    || "com.x.android".equals(packageName)
+                    || "com.facebook.katana".equals(packageName)) {
+                return method.invoke(who, args);
+            }
+
 
 
             ApplicationInfo applicationInfo = BlackBoxCore.getBPackageManager().getApplicationInfo(packageName, flags, BlackBoxCore.getUserId());
@@ -368,8 +380,34 @@ public class IPackageManagerProxy extends BinderInvocationStub {
     public static class GetInstallerPackageName extends MethodHook {
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
-            
+            String pkg = (args != null && args.length > 0) ? (String) args[0] : null;
+            if ("com.twitter.android".equals(pkg)
+                    || "com.x.android".equals(pkg)
+                    || "com.facebook.katana".equals(pkg)) {
+                return method.invoke(who, args);
+            }
             return "com.android.vending";
+        }
+    }
+
+    @ProxyMethod("queryIntentActivities")
+    public static class QueryIntentActivities extends MethodHook {
+        @Override
+        protected Object hook(Object who, Method method, Object[] args) throws Throwable {
+            Intent intent = (Intent) args[0];
+            if (intent != null && intent.getPackage() != null
+                    && intent.getPackage().contains("twitter")) {
+                return ParceledListSliceCompat.create(
+                        BlackBoxCore.getBPackageManager()
+                                .queryIntentActivities(
+                                        intent,
+                                        MethodParameterUtils.toInt(args[2]),
+                                        (String) args[1],
+                                        BActivityThread.getUserId()
+                                )
+                );
+            }
+            return method.invoke(who, args);
         }
     }
 
