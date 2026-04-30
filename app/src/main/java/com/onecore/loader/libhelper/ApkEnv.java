@@ -83,7 +83,11 @@ public class ApkEnv {
 
         ApplicationInfo applicationInfo = null;
         try {
-            applicationInfo = BlackBoxCore.getBPackageManager().getApplicationInfo(packageName, 0, 0);
+            applicationInfo = BlackBoxCore.getBPackageManager().getApplicationInfo(
+                    packageName,
+                    0,
+                    BlackBoxCore.getUserId()
+            );
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
