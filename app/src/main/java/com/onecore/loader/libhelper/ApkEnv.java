@@ -116,7 +116,7 @@ public class ApkEnv {
         }
 
         File loader = new File(is_online ? new File(BoxApplication.get().getFilesDir(), "loader").toString() : BoxApplication.get().getApplicationInfo().nativeLibraryDir, target);
-        File loaderDest = new File(applicationInfo.nativeLibraryDir, packageName.equals("com.miraclegames.farlight84") ? "libfarlight.so" : "libAkAudioVisiual.so");
+        File loaderDest = new File(applicationInfo.nativeLibraryDir, resolveDestLibName(packageName, applicationInfo.nativeLibraryDir));
 
         if (!loader.exists()) {
             FLog.error("Loader library missing: " + loader.getAbsolutePath());
@@ -134,6 +134,23 @@ public class ApkEnv {
         }
         return false;
     }
+
+    private String resolveDestLibName(String packageName, String nativeLibDir) {
+        if (packageName.equals("com.miraclegames.farlight84")) {
+            return "libfarlight.so";
+        }
+
+        File libDir = new File(nativeLibDir);
+        String[] candidates = new String[]{
+                "libAkAudioVisual.so",
+                "libAkAudioVisiual.so"
+        };
+        for (String candidate : candidates) {
+            if (new File(libDir, candidate).exists()) {
+                return candidate;
+            }
+        }
+        return "libAkAudioVisual.so";
+    }
     
 }
-
