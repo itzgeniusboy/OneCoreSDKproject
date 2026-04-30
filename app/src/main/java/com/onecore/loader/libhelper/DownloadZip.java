@@ -28,6 +28,8 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -347,8 +349,7 @@ public class DownloadZip {
                     String zipPath = new File(context.getFilesDir(), ZIP_FILE_NAME).getAbsolutePath();
                     String outputDir = context.getFilesDir().getAbsolutePath();
                     String password = PASSJKPAPA();
-
-                    if (unzipEncrypted(zipPath, outputDir, password)) {
+                    if (unzipFile(zipPath, outputDir, password)) {
                         moveSoFiles(new File(outputDir, "loader"));
                         new File(context.getFilesDir(), ZIP_FILE_NAME).delete();
                         
@@ -375,47 +376,73 @@ public class DownloadZip {
 
     private boolean downloadFile(String downloadUrl, DownloadCallback callback) {
         File outputZip = new File(context.getFilesDir(), ZIP_FILE_NAME);
-        try (InputStream input = new URL(downloadUrl).openStream();
-             OutputStream output = new FileOutputStream(outputZip)) {
-
-            HttpURLConnection connection = (HttpURLConnection) new URL(downloadUrl).openConnection();
+        HttpURLConnection connection = null;
+        try {
+            URL url = new URL(downloadUrl);
+            connection = (HttpURLConnection) url.openConnection();
+            connection.setInstanceFollowRedirects(true);
+            connection.setConnectTimeout(15000);
+            connection.setReadTimeout(30000);
+            connection.setRequestProperty("User-Agent", "OneCoreLoader/1.0");
             connection.connect();
-            int lengthOfFile = connection.getContentLength();
-            
-            long totalBytes = lengthOfFile;
-            downloadedBytes = 0;
 
-            byte[] data = new byte[4096];
-            int count;
-            while ((count = input.read(data)) != -1) {
-                downloadedBytes += count;
-                int progress = (int) ((downloadedBytes * 100) / totalBytes);
-                
-                // Update progress
-                final int finalProgress = progress;
-                handler.post(() -> {
-                    if (downloadProgressBar != null && isDownloading) {
-                        updateDownloadProgress(finalProgress, "Downloading...", downloadedBytes, totalBytes);
-                    }
-                    if (callback != null) {
-                        callback.onProgress(finalProgress);
-                    }
-                });
-                
-                output.write(data, 0, count);
+            int responseCode = connection.getResponseCode();
+            if (responseCode < 200 || responseCode >= 300) {
+                return false;
             }
 
-            return outputZip.exists();
+            long totalBytes = connection.getContentLengthLong();
+            downloadedBytes = 0;
+
+            try (InputStream input = connection.getInputStream();
+                 OutputStream output = new FileOutputStream(outputZip)) {
+                byte[] data = new byte[8192];
+                int count;
+                while ((count = input.read(data)) != -1) {
+                    downloadedBytes += count;
+                    output.write(data, 0, count);
+
+                    final int finalProgress;
+                    if (totalBytes > 0) {
+                        finalProgress = (int) ((downloadedBytes * 100) / totalBytes);
+                    } else {
+                        finalProgress = 0;
+                    }
+
+                    handler.post(() -> {
+                        if (downloadProgressBar != null && isDownloading) {
+                            String msg = totalBytes > 0 ? "Downloading..." : "Downloading... (size unknown)";
+                            long safeTotal = totalBytes > 0 ? totalBytes : downloadedBytes;
+                            updateDownloadProgress(finalProgress, msg, downloadedBytes, safeTotal);
+                        }
+                        if (callback != null) {
+                            callback.onProgress(finalProgress);
+                        }
+                    });
+                }
+            }
+
+            return outputZip.exists() && outputZip.length() > 0;
 
         } catch (Exception e) {
             e.printStackTrace();
             return false;
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
         }
     }
 
-    private boolean unzipEncrypted(String zipPath, String outputDir, String password) {
+    private boolean unzipFile(String zipPath, String outputDir, String password) {
         try {
-            ZipFile zipFile = new ZipFile(zipPath, password.toCharArray());
+            ZipFile zipFile = new ZipFile(zipPath);
+            if (zipFile.isEncrypted()) {
+                if (password == null || password.trim().isEmpty()) {
+                    return false;
+                }
+                zipFile.setPassword(password.toCharArray());
+            }
             zipFile.extractAll(outputDir);
             setPermissions(new File(outputDir));
             return true;
@@ -429,16 +456,30 @@ public class DownloadZip {
         File outputDir = context.getFilesDir();
         if (!loaderFolder.exists()) loaderFolder.mkdirs();
 
-        File[] files = outputDir.listFiles((dir, name) -> name.endsWith(".so"));
-        if (files != null) {
-            for (File soFile : files) {
-                try {
-                    java.nio.file.Files.move(soFile.toPath(), 
-                        new File(loaderFolder, soFile.getName()).toPath(), 
+        List<File> soFiles = new ArrayList<>();
+        collectSoFiles(outputDir, soFiles, loaderFolder);
+        for (File soFile : soFiles) {
+            try {
+                java.nio.file.Files.move(soFile.toPath(),
+                        new File(loaderFolder, soFile.getName()).toPath(),
                         java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private void collectSoFiles(File dir, List<File> out, File loaderFolder) {
+        File[] files = dir.listFiles();
+        if (files == null) return;
+
+        for (File file : files) {
+            if (file.equals(loaderFolder)) continue;
+
+            if (file.isDirectory()) {
+                collectSoFiles(file, out, loaderFolder);
+            } else if (file.getName().endsWith(".so")) {
+                out.add(file);
             }
         }
     }
