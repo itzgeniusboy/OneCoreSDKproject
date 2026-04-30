@@ -28,6 +28,8 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -449,16 +451,30 @@ public class DownloadZip {
         File outputDir = context.getFilesDir();
         if (!loaderFolder.exists()) loaderFolder.mkdirs();
 
-        File[] files = outputDir.listFiles((dir, name) -> name.endsWith(".so"));
-        if (files != null) {
-            for (File soFile : files) {
-                try {
-                    java.nio.file.Files.move(soFile.toPath(), 
-                        new File(loaderFolder, soFile.getName()).toPath(), 
+        List<File> soFiles = new ArrayList<>();
+        collectSoFiles(outputDir, soFiles, loaderFolder);
+        for (File soFile : soFiles) {
+            try {
+                java.nio.file.Files.move(soFile.toPath(),
+                        new File(loaderFolder, soFile.getName()).toPath(),
                         java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private void collectSoFiles(File dir, List<File> out, File loaderFolder) {
+        File[] files = dir.listFiles();
+        if (files == null) return;
+
+        for (File file : files) {
+            if (file.equals(loaderFolder)) continue;
+
+            if (file.isDirectory()) {
+                collectSoFiles(file, out, loaderFolder);
+            } else if (file.getName().endsWith(".so")) {
+                out.add(file);
             }
         }
     }
