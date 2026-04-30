@@ -1,11 +1,17 @@
 package top.niunaijun.blackbox.core;
 
 import android.content.pm.PackageManager;
+import android.content.Intent;
+import android.content.Context;
+import android.webkit.CookieManager;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
 
 import java.util.HashSet;
 import java.util.Set;
 
 import top.niunaijun.blackbox.BlackBoxCore;
+import top.niunaijun.blackbox.app.BActivityThread;
 import top.niunaijun.blackbox.entity.pm.InstallResult;
 
 
@@ -110,5 +116,45 @@ public class GmsCore {
 
     public static boolean isInstalledGoogleService(int userId) {
         return BlackBoxCore.get().isInstalled(GMS_PKG, userId);
+    }
+
+    public static Intent FacebookRedirect(Intent intent) {
+        if (intent == null) return null;
+        try {
+            intent.setPackage(BActivityThread.getAppPackageName());
+        } catch (Throwable ignored) {
+        }
+        return intent;
+    }
+
+    public static Intent TwitterRedirect(Intent intent) {
+        if (intent == null) return null;
+        try {
+            intent.setPackage(null);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        } catch (Throwable ignored) {
+        }
+        return intent;
+    }
+
+    public static void initLoginWebView(Context context) {
+        try {
+            WebView webView = new WebView(context);
+            WebSettings settings = webView.getSettings();
+            settings.setJavaScriptEnabled(true);
+            settings.setDomStorageEnabled(true);
+            settings.setDatabaseEnabled(true);
+            settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+            settings.setUserAgentString(
+                    "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 " +
+                            "(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+            );
+
+            CookieManager cm = CookieManager.getInstance();
+            cm.setAcceptCookie(true);
+            cm.setAcceptThirdPartyCookies(webView, true);
+            cm.flush();
+        } catch (Throwable ignored) {
+        }
     }
 }
