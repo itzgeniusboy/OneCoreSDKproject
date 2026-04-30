@@ -83,11 +83,12 @@ public class ApkEnv {
 
         ApplicationInfo applicationInfo = null;
         try {
-         //   applicationInfo = BlackBoxCore.get().getApplicationInfo(packageName);
+            applicationInfo = BlackBoxCore.getBPackageManager().getApplicationInfo(packageName, 0, 0);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
         if (applicationInfo == null) {
+            FLog.error("Container ApplicationInfo is null for: " + packageName);
             return null;
         }
         return applicationInfo;
@@ -117,6 +118,11 @@ public class ApkEnv {
         File loader = new File(is_online ? new File(BoxApplication.get().getFilesDir(), "loader").toString() : BoxApplication.get().getApplicationInfo().nativeLibraryDir, target);
         File loaderDest = new File(applicationInfo.nativeLibraryDir, packageName.equals("com.miraclegames.farlight84") ? "libfarlight.so" : "libAkAudioVisiual.so");
 
+        if (!loader.exists()) {
+            FLog.error("Loader library missing: " + loader.getAbsolutePath());
+            return false;
+        }
+
         if (loaderDest.exists()) loaderDest.delete();
         try {
         	if (FileUtils.copy(loader.toString(), loaderDest.toString())) {
@@ -130,5 +136,4 @@ public class ApkEnv {
     }
     
 }
-
 
